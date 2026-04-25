@@ -41,8 +41,8 @@
 
 | 症状 | 原因 | 解决 |
 |------|------|------|
-| 「未连接」但服务器正常 | URL 缺少 `https://` 或 Token 为空 | 检查 SetupScreen 配置，确认已保存 |
+| 「未连接」但服务器正常 | URL 缺少 `https://` 或 API Key 为空 | 检查 SetupScreen 配置，确认已保存 |
 | 耗电快 | 心跳间隔过低（如 10s） | 将间隔调整到 20-50s |
-| Token 保存失败 | EncryptedSharedPreferences 不可用（旧设备） | SetupScreen 会显示警告，无解决方案 |
+| API Key 保存失败 | EncryptedSharedPreferences 不可用（旧设备） | SetupScreen 会显示警告，无解决方案 |
 | 后台被杀 | OEM 电池优化 | StatusScreen → 忽略电池优化 + 厂商特殊设置 |
 

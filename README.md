@@ -70,11 +70,11 @@ cd agents/android-app
 # 产物: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-详见 [`BUILD.md`](agents/android-app/BUILD.md)。
+详见 [`BUILD.md`](BUILD.md)。
 
 ## 架构与代码指南
 
-详见 [`GUIDE.md`](agents/android-app/GUIDE.md)，包含：
+详见 [`GUIDE.md`](GUIDE.md)，包含：
 - 心跳流程、连接检测流程流程
 - 设计决策与架构说明
 - 常见问题排查
@@ -87,4 +87,5 @@ cd agents/android-app
 ## 致谢
 
 [Mix-space](https://github.com/mx-space) - 提供状态函数平台和接口规范，参考使用了其图标素材
+
 [live-dashboard](https://github.com/Monika-Dream/live-dashboard/tree/android-source) - 提供了安卓客户端的初始代码和设计思路，重构了 UI 和同步逻辑。
