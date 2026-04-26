@@ -1,65 +1,104 @@
 # Process Reporter
 
-适用于Mix-space状态函数的安卓客户端，通过root获取前台应用包名，定时上传在线信息和电量。
+Process Reporter 是一个适用于Mix-space状态函数 Android 前台状态上报客户端。它通过无障碍服务监听前台窗口变化，解析当前前台应用的可读名称，并按心跳间隔上传应用状态和电量信息。
 
 ## 下载
 
-预编译 APK 可从 [GitHub Releases](https://github.com/Elvish064/Process-Reporter/releases) 直接下载安装。
+预编译 APK 可从 [GitHub Releases](https://github.com/Elvish064/Process-Reporter/releases) 下载。
 
 ## 快速开始
-1. **安装 APK**：下载并安装最新版本的 `app-debug.apk`。
-2. **授予 Root 权限和后台运行权限**：首次打开应用时，授予 Root 权限以允许获取前台应用信息，并允许应用在后台运行。
-3. **配置服务器地址和密匙**：在设置界面输入 Mix-space 的API地址和密匙。
-4. **启用同步**：返回主界面，启用状态同步功能，应用将开始定时上报状态信息。
 
-### 功能
+1. 安装最新 APK。
+2. 在系统设置中开启本应用的无障碍服务，用于监听前台窗口变化。
+3. 配置服务端地址和 API Token。
+4. 开启监听后，应用会按配置的心跳间隔上传状态。
+5. 如需提高后台存活率，可在设置页开启前台服务，并按状态页提示关闭电池优化。
+
+## 当前实现
+
+### 前台应用识别
+
+- `AppFocusService` 监听 `AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED`。
+- 无障碍事件只用来获取稳定的 `packageName`，不再使用 `event.text` 作为应用名。
+- 应用名通过 `PackageManager` 解析：
+  - 优先 `getApplicationInfo(packageName, 0).loadLabel(...)`
+  - 再通过 launcher intent 查询 `queryIntentActivities(...)` 兜底
+  - 全部失败时才回退到包名
+- 解析成功的可读名称会缓存在内存中，降低重复查询开销。
+- 会过滤 `com.android.systemui` 和本应用自身，避免系统 UI 或自身窗口误报。
+
+Android 11+ 有包可见性限制，因此 `AndroidManifest.xml` 中声明了 `QUERY_ALL_PACKAGES` 和 launcher `<queries>`，否则多数第三方应用可能只能回退为包名。
+
+### 状态上报
+
+- `HeartbeatWorker` 使用自调度 `OneTimeWorkRequest` 周期上报。
+- 默认心跳间隔为 120 秒，可配置范围为 60-300 秒。
+- WorkManager 约束要求网络可用，并且设备不处于低电量状态。
+- URL 或 Token 未配置时不会继续自重排，避免后台空跑。
+- 上报内容包含当前前台应用可读名称和电量百分比。
+
+### 后台保活
+
+- 前台服务是可选项，用于提升后台存活率。
+- 前台服务返回 `START_NOT_STICKY`，系统杀掉后不会强制反复拉起，以降低耗电。
+- 省电优先的默认策略是：较低频心跳 + 低电量暂停 + 不强粘性保活。
+
+## 功能
 
 | 功能 | 说明 |
-|------|------|
-| **状态上报** | 通过root获取包名，映射为文本后上报，10–50 秒间隔（默认 30 秒），上报在线状态和电池信息 |
-| **电量上报** | 自动上报电池电量和充电状态 |
-| **连接状态检测** | 每 5 秒测试服务器连接，顶栏实时显示连接状态 |
-| **诊断日志** | APP 内 DebugLog 页面查看同步日志，方便排查问题 |
+| --- | --- |
+| 前台应用识别 | 通过无障碍服务获取前台包名，再解析为稳定可读的应用名称 |
+| 状态上报 | 按 60-300 秒间隔上传当前应用状态和电量 |
+| 电量保护 | 低电量时 WorkManager 不主动执行心跳任务 |
+| 可选前台服务 | 提升后台存活率，但默认采用较省电的非粘性策略 |
+| 调试日志 | 在应用内查看同步、权限和异常日志 |
 
-### 技术栈
+## 技术栈
 
-- Kotlin + Jetpack Compose（Material 3）
-- WorkManager — 后台定时同步，支持网络约束和指数退避
-- DataStore — 持久化配置和同步状态
-- EncryptedSharedPreferences — Token 加密存储
+- Kotlin
+- Jetpack Compose + Material 3
+- AccessibilityService
+- WorkManager
+- DataStore
+- EncryptedSharedPreferences
+- OkHttp
 
-### 系统要求
+## 系统要求
 
 - Android 8.0+ (API 26)
+- Android 11+ 设备上需要 manifest 包可见性声明才能稳定解析第三方应用名称
 
-### 文件结构
+## 项目结构
 
-```
+```text
 agents/android-app/
-├── app/
-│   ├── build.gradle.kts              # 构建配置（SDK 版本、依赖）
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       └── java/com/monika/dashboard/
-│           ├── MainActivity.kt        # 入口 + 导航
-│           ├── DashboardApp.kt        # Application 类
-│           ├── data/
-│           │   ├── SettingsStore.kt    # DataStore 配置管理
-│           │   └── DebugLog.kt        # 内存日志（UI 查看）
-│           ├── health/
-│           │   ├── HealthConnectManager.kt  # HC 权限、读取、特性检测
-│           │   └── HealthSyncWorker.kt      # WorkManager 同步任务
-│           ├── network/
-│           │   └── ReportClient.kt    # HTTP 上报客户端
-│           └── ui/screens/
-│               ├── SetupScreen.kt     # 服务器配置
-│               ├── StatusScreen.kt    # 状态总览 + 权限诊断
-│               └── DebugLogScreen.kt  # 日志查看
-├── BUILD.md                           # 构建指南
-├── GUIDE.md                           # 代码指南（架构、流程、API）
-├── build.gradle.kts                   # 项目级构建
-├── gradle/                            # Gradle wrapper
-└── settings.gradle.kts
+├─ app/
+│  ├─ build.gradle.kts
+│  └─ src/main/
+│     ├─ AndroidManifest.xml
+│     ├─ res/xml/accessibility_service_config.xml
+│     └─ java/com/monika/dashboard/
+│        ├─ DashboardApp.kt
+│        ├─ MainActivity.kt
+│        ├─ data/
+│        │  ├─ SettingsStore.kt
+│        │  └─ DebugLog.kt
+│        ├─ repository/
+│        │  └─ AppStatusRepository.kt
+│        ├─ network/
+│        │  └─ ReportClient.kt
+│        ├─ service/
+│        │  ├─ AppFocusService.kt
+│        │  ├─ AppForegroundService.kt
+│        │  └─ HeartbeatWorker.kt
+│        └─ ui/screens/
+│           ├─ SetupScreen.kt
+│           └─ StatusScreen.kt
+├─ BUILD.md
+├─ GUIDE.md
+├─ build.gradle.kts
+├─ gradle/
+└─ settings.gradle.kts
 ```
 
 ## 构建
@@ -67,21 +106,25 @@ agents/android-app/
 ```bash
 cd agents/android-app
 ./gradlew assembleDebug
-# 产物: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-详见 [`BUILD.md`](BUILD.md)。
+Windows:
 
-## 架构与代码指南
+```powershell
+.\gradlew.bat assembleDebug
+```
 
-详见 [`GUIDE.md`](GUIDE.md)，包含：
-- 心跳流程、连接检测流程流程
-- 设计决策与架构说明
-- 常见问题排查
+产物路径：
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+更多信息见 [BUILD.md](BUILD.md) 和 [GUIDE.md](GUIDE.md)。
 
 ## 许可证
-本项目采用 [MIT 许可证](LICENSE)
 
+本项目采用 [MIT License](LISENCE)。
 ---
 
 ## 致谢

@@ -23,7 +23,7 @@ class SettingsStore(private val context: Context) {
         val SERVER_URL = stringPreferencesKey("server_url")
         val REPORT_INTERVAL = intPreferencesKey("report_interval")
         val CUSTOM_EMOJI_MAP = stringPreferencesKey("custom_emoji_map")
-        val CUSTOM_PACKAGE_MAP = stringPreferencesKey("custom_package_map")
+        val FOREGROUND_SERVICE_ENABLED = booleanPreferencesKey("foreground_service_enabled")
         val MONITORING_ENABLED = booleanPreferencesKey("monitoring_enabled")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
     }
@@ -41,8 +41,8 @@ class SettingsStore(private val context: Context) {
         prefs[Keys.CUSTOM_EMOJI_MAP] ?: ""
     }
 
-    val customPackageMap: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[Keys.CUSTOM_PACKAGE_MAP] ?: ""
+    val foregroundServiceEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.FOREGROUND_SERVICE_ENABLED] ?: false
     }
 
     val monitoringEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -71,8 +71,8 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.CUSTOM_EMOJI_MAP] = emoji }
     }
 
-    suspend fun setCustomPackageMap(packageMapping: String) {
-        context.dataStore.edit { it[Keys.CUSTOM_PACKAGE_MAP] = packageMapping }
+    suspend fun setForegroundServiceEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.FOREGROUND_SERVICE_ENABLED] = enabled }
     }
 
     suspend fun setMonitoringEnabled(enabled: Boolean) {

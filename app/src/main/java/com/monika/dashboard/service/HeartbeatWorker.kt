@@ -26,9 +26,9 @@ class HeartbeatWorker(
         private const val TAG = "Heartbeat"
         private const val WORK_NAME = "heartbeat_report"
         private const val KEY_INTERVAL_SEC = "interval_sec"
-        const val MIN_INTERVAL_SECONDS = 10
-        const val MAX_INTERVAL_SECONDS = 50
-        const val DEFAULT_INTERVAL_SECONDS = 30
+        const val MIN_INTERVAL_SECONDS = 60
+        const val MAX_INTERVAL_SECONDS = 300
+        const val DEFAULT_INTERVAL_SECONDS = 120
 
         fun schedule(context: Context, intervalSeconds: Int = DEFAULT_INTERVAL_SECONDS) {
             val safe = intervalSeconds.coerceIn(MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS)
@@ -49,6 +49,7 @@ class HeartbeatWorker(
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiresBatteryNotLow(true)
                         .build()
                 )
                 .setInputData(workDataOf(KEY_INTERVAL_SEC to intervalSec))
@@ -65,6 +66,7 @@ class HeartbeatWorker(
     override suspend fun doWork(): Result {
         val settings = SettingsStore(applicationContext)
         val intervalSec = inputData.getInt(KEY_INTERVAL_SEC, DEFAULT_INTERVAL_SECONDS)
+            .coerceIn(MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS)
 
         val enabled = settings.monitoringEnabled.first()
         if (!enabled) {
@@ -76,7 +78,6 @@ class HeartbeatWorker(
         val token = settings.getToken()
         if (url.isEmpty() || token.isNullOrEmpty()) {
             DebugLog.log("心跳Worker", "URL或Token未配置，跳过")
-            enqueueNext(applicationContext, intervalSec)
             return Result.success()
         }
 
@@ -84,21 +85,12 @@ class HeartbeatWorker(
         try {
             client = ReportClient(url, token)
 
-            val appId = getForegroundAppViaRoot()
+            val appId = me.elvish.statusreporter.repository.AppStatusRepository.currentForegroundApp
             val battery = getBatteryInfo()
             val batteryStr = battery?.let { " | \uD83D\uDD0B${it.first}%" } ?: ""
             
-            val emojiStr = settings.customEmojiMap.first().takeIf { it.isNotBlank() } ?: "📱"
-            val packageMapStr = settings.customPackageMap.first()
-            val packageMap = mutableMapOf<String, String>()
-            packageMapStr.lines().forEach { line ->
-                val parts = line.trim().split(Regex("\\s+"), limit = 2)
-                if (parts.size == 2) {
-                    packageMap[parts[0].trim()] = parts[1].trim()
-                }
-            }
-            val mappedDesc = packageMap[appId] ?: appId
-            val desc = "$mappedDesc$batteryStr"
+            val emojiStr = me.elvish.statusreporter.repository.AppStatusRepository.emoji
+            val desc = "$appId$batteryStr"
 
             val result = client.reportApp(
                 emoji = emojiStr,
@@ -142,23 +134,6 @@ class HeartbeatWorker(
             }
         } catch (_: Exception) {
             null
-        }
-    }
-
-    private fun getForegroundAppViaRoot(): String {
-        return try {
-            // Android 14 可通过 dumpsys window 获取当前焦点窗口
-            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "dumpsys window | grep mCurrentFocus"))
-            val reader = java.io.BufferedReader(java.io.InputStreamReader(process.inputStream))
-            val output = reader.readLine() ?: ""
-
-            // output 示例: mCurrentFocus=Window{3f9b20b u0 com.tencent.mm/com.tencent.mm.ui.LauncherUI}
-            // 正则提取包名
-            val match = Regex("u0 ([a-zA-Z0-9._]+)/").find(output)
-            match?.groupValues?.get(1) ?: "android"
-        } catch (e: Exception) {
-            DebugLog.log("Root获取", "失败: ${e.message}")
-            "android"
         }
     }
 }

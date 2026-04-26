@@ -30,14 +30,13 @@ fun SetupScreen(settings: SettingsStore) {
     val serverUrl by settings.serverUrl.collectAsState(initial = "")
     val reportInterval by settings.reportInterval.collectAsState(initial = HeartbeatWorker.DEFAULT_INTERVAL_SECONDS)
     val customEmojiMap by settings.customEmojiMap.collectAsState(initial = "📱")
-    val customPackageMap by settings.customPackageMap.collectAsState(initial = "")
     val monitoringEnabled by settings.monitoringEnabled.collectAsState(initial = false)
+    val foregroundServiceEnabled by settings.foregroundServiceEnabled.collectAsState(initial = false)
 
     var urlInput by remember(serverUrl) { mutableStateOf(serverUrl) }
     var tokenInput by remember { mutableStateOf("") }
     var intervalInput by remember(reportInterval) { mutableStateOf(reportInterval.toString()) }
     var emojiInput by remember(customEmojiMap) { mutableStateOf(customEmojiMap) }
-    var packageMapInput by remember(customPackageMap) { mutableStateOf(customPackageMap) }
 
     // Load token asynchronously to avoid blocking main thread
     LaunchedEffect(Unit) {
@@ -127,16 +126,26 @@ fun SetupScreen(settings: SettingsStore) {
             shape = RoundedCornerShape(8.dp)
         )
 
-        // Custom Package Map
-        OutlinedTextField(
-            value = packageMapInput,
-            onValueChange = { packageMapInput = it },
-            label = { Text("包名映射") },
-            placeholder = { Text("com.tencent.mobileqq 在QQ水群喵~\ntv.danmaku.bili 哔哩哔哩") },
-            supportingText = { Text("每行一条，包名 和 映射名 之间使用空格分隔") },
-            modifier = Modifier.fillMaxWidth().height(120.dp),
-            shape = RoundedCornerShape(8.dp)
-        )
+        // Foreground Service Toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("启动前台服务保活", style = MaterialTheme.typography.bodyLarge)
+                Text("可选。开启后将显示常驻通知，有助于进程保活", style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(
+                checked = foregroundServiceEnabled,
+                onCheckedChange = { checked ->
+                    scope.launch {
+                        settings.setForegroundServiceEnabled(checked)
+                    }
+                }
+            )
+        }
 
         // Save Button
         Button(
@@ -154,7 +163,6 @@ fun SetupScreen(settings: SettingsStore) {
                     settings.setServerUrl(url)
                     settings.setToken(tokenInput)
                     settings.setCustomEmojiMap(emojiInput)
-                    settings.setCustomPackageMap(packageMapInput)
                     val seconds = intervalInput.toIntOrNull()?.coerceIn(
                         HeartbeatWorker.MIN_INTERVAL_SECONDS,
                         HeartbeatWorker.MAX_INTERVAL_SECONDS,
